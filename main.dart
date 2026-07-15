@@ -1,20 +1,20 @@
 import 'package:flutter/material.dart';
-import 'dart:convert'; // 👈 ضروري لتحويل البيانات إلى JSON
-import 'package:shared_preferences/shared_preferences.dart'; // 👈 استدعاء حزمة الحفظ
+import 'dart:convert'; // 👈 ضروري لتحويل البيانات إلى JSON للحفظ الآمن
+import 'package:shared_preferences/shared_preferences.dart'; // 👈 استدعاء حزمة حفظ البيانات
 
 void main() {
   WidgetsFlutterBinding.ensureInitialized();
   runApp(const TitanGymApp());
 }
 
-// 🏛️ كلاس نموذج بيانات اللاعب (التوقيت الحقيقي)
+// 🏛️ كلاس نموذج بيانات اللاعب
 class Player {
   final String id;
-  String name;        // قابلة للتعديل داخل الواجهات
-  String phone;       // قابلة للتعديل داخل الواجهات
-  String status;      // قابلة للتعديل داخل الواجهات
-  String paymentStatus; // قابلة للتعديل داخل الواجهات
-  DateTime lastPaymentDate; // قابلة للتعديل داخل الواجهات
+  String name;        
+  String phone;       
+  String status;      
+  String paymentStatus; 
+  DateTime lastPaymentDate; 
   final Map<String, String> program;
 
   Player({
@@ -71,27 +71,47 @@ class GymNotification {
   });
 }
 
-// 📜 كلاس سجل المدفوعات التاريخي
+// 📜 كلاس سجل المدفوعات التاريخي (مربوط بـ ID اللاعب لمنع تداخل الحسابات نهائياً)
 class PaymentLog {
+  String id; 
+  String playerId; // 👈 لربط السجل باللاعب بشكل فريد لا يقبل الخطأ والتداخل
   String playerName;
   DateTime date; 
   String amount;
+  int paidAmount;       
+  int remainingAmount;  
 
-  PaymentLog({required this.playerName, required this.date, required this.amount});
+  PaymentLog({
+    required this.id,
+    required this.playerId,
+    required this.playerName,
+    required this.date,
+    required this.amount,
+    required this.paidAmount,
+    required this.remainingAmount,
+  });
 
   Map<String, dynamic> toJson() {
     return {
+      'id': id,
+      'playerId': playerId,
       'playerName': playerName,
       'date': date.toIso8601String(),
       'amount': amount,
+      'paidAmount': paidAmount,
+      'remainingAmount': remainingAmount,
     };
   }
 
   factory PaymentLog.fromJson(Map<String, dynamic> json) {
     return PaymentLog(
+      id: json['id'] ?? DateTime.now().millisecondsSinceEpoch.toString(),
+      playerId: json['playerId'] ?? '', // أمان الجرد والنسخ السابقة
       playerName: json['playerName'],
       date: DateTime.parse(json['date']),
       amount: json['amount'],
+      paidAmount: json['paidAmount'] ?? 100000,
+      remainingAmount: json['remainingAmount'] ?? 0,
     );
   }
 }
@@ -107,13 +127,11 @@ class TitanGymApp extends StatelessWidget {
         scaffoldBackgroundColor: const Color(0xFF121212),
         primaryColor: Colors.amber,
       ),
-      // 👈 جعلنا التطبيق يبدأ من شاشة الترحيب الرائعة
       home: const SplashScreen(), 
     );
   }
 }
 
-// 🔔 شاشة الترحيب (Splash Screen) المضافة
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -125,7 +143,6 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    // مؤقت زمني يظهر كلمة TITAN لمدة 3 ثوانٍ ثم ينتقل تلقائياً للشاشة الرئيسية
     Future.delayed(const Duration(seconds: 3), () {
       if (mounted) {
         Navigator.pushReplacement(
@@ -139,12 +156,12 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   Widget build(BuildContext context) {
     return const Scaffold(
-      backgroundColor: Color(0xFF121212), // متناسق مع اللون العام للتطبيق
+      backgroundColor: Color(0xFF121212),
       body: Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.fitness_center, size: 80, color: Colors.amber), // أيقونة رياضية
+            Icon(Icons.fitness_center, size: 80, color: Colors.amber),
             SizedBox(height: 20),
             Text(
               'TITAN',
@@ -152,7 +169,7 @@ class _SplashScreenState extends State<SplashScreen> {
                 fontSize: 45,
                 fontWeight: FontWeight.w900,
                 color: Colors.amber,
-                letterSpacing: 8, // تباعد فخم للحروف
+                letterSpacing: 8,
               ),
             ),
             SizedBox(height: 10),
@@ -179,7 +196,6 @@ class MainDashboard extends StatefulWidget {
 }
 
 class _MainDashboardState extends State<MainDashboard> {
-  // المتغيرات الأساسية المعرفة بشكل نظيف بداخل كلاس الـ State
   int _currentSubscriptionFee = 100000; 
   String _searchQuery = "";
   bool _isSearching = false;
@@ -192,10 +208,10 @@ class _MainDashboardState extends State<MainDashboard> {
   @override
   void initState() {
     super.initState();
-    _loadDataFromStorage(); // تحميل فوري ومستقر عند فتح الواجهة الرئيسية
+    _loadDataFromStorage();
   }
 
-  // 💾 دالة حفظ البيانات في ذاكرة الجهاز
+  // 💾 دالة حفظ البيانات في ذاكرة الجهاز الأمنية
   Future<void> _saveDataToStorage() async {
     try {
       final prefs = await SharedPreferences.getInstance();
@@ -244,7 +260,7 @@ class _MainDashboardState extends State<MainDashboard> {
     }
   }
 
-  // 🔔 دالة الفحص والتحويل الآلي للدورات الجديدة
+  // 🔔 دالة الفحص والتحويل الآلي للدورات الجديدة بعد انتهاء 30 يوماً
   void _checkExpiringMembers() {
     DateTime now = DateTime.now();
     bool hasChanges = false;
@@ -313,7 +329,7 @@ class _MainDashboardState extends State<MainDashboard> {
                         lastPaymentDate: DateTime.now(), 
                         program: {},
                       ));
-                      _saveDataToStorage(); // حفظ فوري ومستقر بعد الإضافة
+                      _saveDataToStorage();
                     });
                     Navigator.pop(context);
                   }
@@ -327,6 +343,7 @@ class _MainDashboardState extends State<MainDashboard> {
     );
   }
 
+  // 📜 السجل التاريخي للجرد (تم تحديث تصميمه بالكامل ليدعم شاشات الموبايل بنسبة 100%)
   void _showPaymentLogsDialog() {
     showDialog(
       context: context,
@@ -341,12 +358,12 @@ class _MainDashboardState extends State<MainDashboard> {
                   children: [
                     Icon(Icons.receipt_long, color: Colors.green),
                     SizedBox(width: 10),
-                    Text('📜 سجل المقبوضات التاريخي بالجرد', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
+                    Text('📜 سجل المقبوضات التاريخي بالجرد', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 16)),
                   ],
                 ),
                 content: SizedBox(
-                  width: MediaQuery.of(context).size.width * 0.85,
-                  height: 300,
+                  width: MediaQuery.of(context).size.width * 0.95, // 👈 متوافق تماماً مع الموبايل
+                  height: 350,
                   child: _globalPaymentLogs.isEmpty
                       ? const Center(child: Text('السجل فارغ تماماً حتى الآن.', style: TextStyle(color: Colors.white38)))
                       : ListView.builder(
@@ -359,12 +376,20 @@ class _MainDashboardState extends State<MainDashboard> {
 
                             return Card(
                               color: const Color(0xFF222222),
+                              margin: const EdgeInsets.symmetric(vertical: 4),
                               child: ListTile(
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                                 title: Row(
                                   children: [
-                                    Text(log.playerName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                                    Expanded( // 👈 يمنع التداخل ويقص الاسم الطويل بأدب
+                                      child: Text(
+                                        log.playerName, 
+                                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
                                     if (isOldLog) ...[
-                                      const SizedBox(width: 8),
+                                      const SizedBox(width: 4),
                                       Container(
                                         padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
                                         decoration: BoxDecoration(color: Colors.white12, borderRadius: BorderRadius.circular(4)),
@@ -373,27 +398,31 @@ class _MainDashboardState extends State<MainDashboard> {
                                     ]
                                   ],
                                 ),
-                                subtitle: Text('📅 التاريخ: $formattedDate'),
-                                trailing: Row(
-                                  mainAxisSize: MainAxisSize.min,
+                                subtitle: Column( // 👈 ترتيب عمودي لحفظ المساحة الأفقية بالموبايل
+                                  crossAxisAlignment: CrossAxisAlignment.start,
                                   children: [
-                                    Text(log.amount, style: const TextStyle(color: Colors.green, fontWeight: FontWeight.bold)),
-                                    const SizedBox(width: 8),
-                                    IconButton(
-                                      icon: const Icon(Icons.delete_sweep, color: Colors.redAccent),
-                                      onPressed: () {
-                                        setState(() {
-                                          setModalState(() {
-                                            _globalPaymentLogs.removeAt(idx);
-                                          });
-                                          _saveDataToStorage(); // حفظ التعديل بعد الحذف المالي
-                                        });
-                                        ScaffoldMessenger.of(context).showSnackBar(
-                                          const SnackBar(content: Text('🗑️ تم إزالة السجل المالي الخاطئ بنجاح!'), duration: Duration(milliseconds: 800)),
-                                        );
-                                      },
+                                    const SizedBox(height: 4),
+                                    Text('📅 التاريخ: $formattedDate', style: const TextStyle(fontSize: 11, color: Colors.white54)),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      log.amount, 
+                                      style: const TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.bold, fontSize: 12),
                                     ),
                                   ],
+                                ),
+                                trailing: IconButton( // 👈 أيقونة الحذف معزولة باليسار دون تداخل
+                                  icon: const Icon(Icons.delete_sweep, color: Colors.redAccent, size: 24),
+                                  onPressed: () {
+                                    setState(() {
+                                      setModalState(() {
+                                        _globalPaymentLogs.removeAt(idx);
+                                      });
+                                      _saveDataToStorage();
+                                    });
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      const SnackBar(content: Text('🗑️ تم إزالة السجل المالي الخاطئ بنجاح!'), duration: Duration(milliseconds: 800)),
+                                    );
+                                  },
                                 ),
                               ),
                             );
@@ -401,7 +430,7 @@ class _MainDashboardState extends State<MainDashboard> {
                         ),
                 ),
                 actions: [
-                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('إغلاق ورجوع', style: TextStyle(color: Colors.amber))),
+                  TextButton(onPressed: () => Navigator.pop(context), child: const Text('إغلاق ورجوع', style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold))),
                 ],
               ),
             );
@@ -448,9 +477,9 @@ class _MainDashboardState extends State<MainDashboard> {
                               child: Container(
                                 padding: const EdgeInsets.all(10),
                                 decoration: BoxDecoration(
-                                  color: notif.isRead ? Colors.grey.withValues(alpha: 0.05) : Colors.amber.withValues(alpha: 0.08),
+                                  color: notif.isRead ? Colors.grey.withOpacity(0.05) : Colors.amber.withOpacity(0.08),
                                   borderRadius: BorderRadius.circular(8),
-                                  border: Border.all(color: notif.isRead ? Colors.grey.withValues(alpha: 0.2) : Colors.amber.withValues(alpha: 0.3)),
+                                  border: Border.all(color: notif.isRead ? Colors.grey.withOpacity(0.2) : Colors.amber.withOpacity(0.3)),
                                 ),
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
@@ -548,7 +577,7 @@ class _MainDashboardState extends State<MainDashboard> {
                           decoration: BoxDecoration(
                             color: const Color(0xFF222222),
                             borderRadius: BorderRadius.circular(12),
-                            border: Border.all(color: Colors.amber.withValues(alpha: 0.2)),
+                            border: Border.all(color: Colors.amber.withOpacity(0.2)),
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -563,7 +592,7 @@ class _MainDashboardState extends State<MainDashboard> {
                               const Divider(color: Colors.amber, height: 15),
                               const Text('اسم النظام: TITAN GYM MANAGER', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13)),
                               const SizedBox(height: 4),
-                              const Text('المصمم والمطور الرئيسي: المبرمج قيس عزام', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 13)), // تم الالتزام بتعديل اللقب قيس عزام
+                              const Text('المصمم والمطور الرئيسي: المبرمج قيس عزام', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.green, fontSize: 13)),
                               const SizedBox(height: 8),
                               Text(
                                 'الشرح التفصيلي:\nهو نظام تفاعلي متكامل ومصمم خصيصاً لإدارة الصالات الرياضية والنوادي الاحترافية. يتيح للكوتش تتبع ملفات اللاعبين، فرز النشطين، صياغة البرامج الرياضية الأسبوعية لكل بطل بشكل مرن عبر نصوص تلميحية مهمشة، وحماية الجرد المحاسبي عبر سجل مقبوضات تاريخي مستقل باليوم والسنة. كما يتضمن نظام حماية ذكي يفحص تلقائياً مرور 30 يوماً على الاشتراكات لقلب الحالة وضمان الحقوق المالية.',
@@ -584,7 +613,7 @@ class _MainDashboardState extends State<MainDashboard> {
                       if (feeController.text.isNotEmpty) {
                         setState(() {
                           _currentSubscriptionFee = int.parse(feeController.text.trim());
-                          _saveDataToStorage(); // حفظ القيمة الجديدة بالذاكرة
+                          _saveDataToStorage();
                         });
                         Navigator.pop(context);
                         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('💰 تم تحديث قيمة الاشتراك إلى: ${_formatMoney(_currentSubscriptionFee)}')));
@@ -614,6 +643,22 @@ class _MainDashboardState extends State<MainDashboard> {
       programControllers[day] = TextEditingController(text: player.program[day] ?? '');
     }
 
+    // 🔍 البحث عن وجود دفعة غير مكتملة (ذمة متبقية) لهذا اللاعب بالـ ID الفريد لمنع تداخل الأسماء نهائياً
+    PaymentLog? activePendingLog;
+    try {
+      activePendingLog = _globalPaymentLogs.lastWhere(
+        (log) => log.playerId == player.id && log.remainingAmount > 0
+      );
+    } catch (_) {
+      activePendingLog = null;
+    }
+
+    // متغيرات لحفظ حالة الدفع المؤقتة
+    String finalRecordedLogAmount = _formatMoney(_currentSubscriptionFee);
+    int tempPaidVal = _currentSubscriptionFee;
+    int tempRemainingVal = 0;
+    bool isUpdateLogOperation = false;
+
     showDialog(
       context: context,
       barrierDismissible: false, 
@@ -640,11 +685,31 @@ class _MainDashboardState extends State<MainDashboard> {
                 player.phone = editPhoneController.text.trim();
                 player.status = currentStatus;
                 
-                if (currentPayment == 'تم الدفع' && player.paymentStatus == 'لم يتم الدفع') {
+                // 💵 أولاً: التحقق من تحديث السجل المالي بدقة متناهية
+                if (isUpdateLogOperation && activePendingLog != null) {
+                  int logIndex = _globalPaymentLogs.indexWhere((l) => l.id == activePendingLog!.id);
+                  if (logIndex != -1) {
+                    _globalPaymentLogs[logIndex] = PaymentLog(
+                      id: activePendingLog.id,
+                      playerId: player.id,
+                      playerName: player.name,
+                      date: DateTime.now(), // تحديث تاريخ الحركة الأخيرة
+                      amount: finalRecordedLogAmount,
+                      paidAmount: tempPaidVal,
+                      remainingAmount: tempRemainingVal,
+                    );
+                  }
+                } 
+                // ثانياً: تسجيل دفعة جديدة لأول مرة
+                else if (currentPayment == 'تم الدفع' && player.paymentStatus == 'لم يتم الدفع') {
                   _globalPaymentLogs.add(PaymentLog(
+                    id: DateTime.now().millisecondsSinceEpoch.toString(),
+                    playerId: player.id,
                     playerName: player.name,
                     date: DateTime.now(), 
-                    amount: _formatMoney(_currentSubscriptionFee),
+                    amount: finalRecordedLogAmount,
+                    paidAmount: tempPaidVal,
+                    remainingAmount: tempRemainingVal,
                   ));
                 }
                 
@@ -655,13 +720,257 @@ class _MainDashboardState extends State<MainDashboard> {
                 }
                 
                 _checkExpiringMembers(); 
-                _saveDataToStorage(); // حفظ فوري بعد الحفظ بالتعديل
+                _saveDataToStorage();
               });
               Navigator.pop(context); 
             }
 
+            // 💵 الدالة المنبثقة الأولى لتحصيل دفعة أولى جديدة (مثال: دفع 75 الف وباقي 25 الف)
+            void _promptInitialPaymentDialog() {
+              final paidAmountController = TextEditingController(text: _currentSubscriptionFee.toString());
+              int paidAmount = _currentSubscriptionFee;
+              int remainingAmount = 0;
+
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (paymentContext) {
+                  return StatefulBuilder(
+                    builder: (paymentContext, setPaymentState) {
+                      return Directionality(
+                        textDirection: TextDirection.rtl,
+                        child: AlertDialog(
+                          backgroundColor: const Color(0xFF1E1E1E),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15), side: const BorderSide(color: Colors.green)),
+                          title: const Row(
+                            children: [
+                              Icon(Icons.payment, color: Colors.green),
+                              SizedBox(width: 8),
+                              Text('تفاصيل تحصيل الدفعة الماليّة الجديدة', style: TextStyle(color: Colors.green, fontWeight: FontWeight.bold, fontSize: 16)),
+                            ],
+                          ),
+                          content: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('قيمة الاشتراك الشهري المعتمد: ${_formatMoney(_currentSubscriptionFee)}', style: const TextStyle(color: Colors.white70, fontSize: 13)),
+                              const SizedBox(height: 15),
+                              TextField(
+                                controller: paidAmountController,
+                                keyboardType: TextInputType.number,
+                                decoration: const InputDecoration(
+                                  labelText: 'المبلغ المدفوع حالياً',
+                                  border: OutlineInputBorder(),
+                                  isDense: true,
+                                  suffixText: 'ل.س',
+                                ),
+                                onChanged: (value) {
+                                  setPaymentState(() {
+                                    int enteredAmount = int.tryParse(value) ?? 0;
+                                    paidAmount = enteredAmount;
+                                    remainingAmount = _currentSubscriptionFee - enteredAmount;
+                                    if (remainingAmount < 0) remainingAmount = 0;
+                                  });
+                                },
+                              ),
+                              const SizedBox(height: 15),
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: remainingAmount > 0 ? Colors.red.withOpacity(0.1) : Colors.green.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: remainingAmount > 0 ? Colors.red : Colors.green, width: 0.5),
+                                ),
+                                child: Row(
+                                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                  children: [
+                                    const Text('المبلغ المتبقي بذمة اللاعب:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                                    Text(
+                                      _formatMoney(remainingAmount), 
+                                      style: TextStyle(
+                                        color: remainingAmount > 0 ? Colors.redAccent : Colors.greenAccent, 
+                                        fontWeight: FontWeight.bold, 
+                                        fontSize: 13,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              )
+                            ],
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () {
+                                Navigator.pop(paymentContext);
+                                setDialogState(() {
+                                  currentPayment = 'لم يتم الدفع';
+                                });
+                              },
+                              child: const Text('إلغاء', style: TextStyle(color: Colors.white60)),
+                            ),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(backgroundColor: Colors.green, foregroundColor: Colors.black),
+                              onPressed: () {
+                                setDialogState(() {
+                                  tempPaidVal = paidAmount;
+                                  tempRemainingVal = remainingAmount;
+                                  isUpdateLogOperation = false;
+
+                                  if (remainingAmount > 0) {
+                                    finalRecordedLogAmount = "المدفوع: ${_formatMoney(paidAmount)} (المتبقي: ${_formatMoney(remainingAmount)})";
+                                  } else {
+                                    finalRecordedLogAmount = _formatMoney(paidAmount);
+                                  }
+                                });
+                                Navigator.pop(paymentContext);
+                              },
+                              child: const Text('تأكيد الدفعة', style: TextStyle(fontWeight: FontWeight.bold)),
+                            )
+                          ],
+                        ),
+                      );
+                    },
+                  );
+                },
+              );
+            }
+
+            // 💵 الدالة المنبثقة الثانية لتسجيل واستكمال الدفعة المتبقية (مثال: دفع 25 الف المتبقية)
+            void _promptDebtCompletionDialog() {
+              if (activePendingLog == null) return;
+
+              final extraPaidController = TextEditingController();
+              int extraPaid = 0;
+              int newPaidTotal = activePendingLog.paidAmount;
+              int newRemaining = activePendingLog.remainingAmount;
+
+              showDialog(
+                context: context,
+                barrierDismissible: false,
+                builder: (completionContext) {
+                  return StatefulBuilder(
+                    builder: (completionContext, setCompletionState) {
+                      return Directionality(
+                        textDirection: TextDirection.rtl,
+                        child: AlertDialog(
+                          backgroundColor: const Color(0xFF1E1E1E),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(15), side: const BorderSide(color: Colors.amber)),
+                          title: const Row(
+                            children: [
+                              Icon(Icons.payment, color: Colors.amber),
+                              SizedBox(width: 8),
+                              Text('استكمال دفعة اللاعب المالية', style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 16)),
+                            ],
+                          ),
+                          content: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('الحالة الحالية بالسجلات:', style: TextStyle(color: Colors.grey.shade400, fontSize: 12)),
+                              const SizedBox(height: 4),
+                              Text('• المدفوع سابقاً: ${_formatMoney(activePendingLog!.paidAmount)}', style: const TextStyle(fontSize: 13, color: Colors.white70)),
+                              Text('• الذمة المتبقية الحالية: ${_formatMoney(activePendingLog!.remainingAmount)}', style: const TextStyle(fontSize: 13, color: Colors.redAccent, fontWeight: FontWeight.bold)),
+                              const Divider(color: Colors.amber, height: 20),
+                              TextField(
+                                controller: extraPaidController,
+                                keyboardType: TextInputType.number,
+                                autofocus: true,
+                                decoration: const InputDecoration(
+                                  labelText: 'أدخل المبلغ المدفوع الآن لاستكمال الذمة',
+                                  border: OutlineInputBorder(),
+                                  isDense: true,
+                                  suffixText: 'ل.س',
+                                ),
+                                onChanged: (value) {
+                                  setCompletionState(() {
+                                    extraPaid = int.tryParse(value) ?? 0;
+                                    
+                                    // منع تجاوز الدفع عن الحد المتبقي لمنع الأخطاء الحسابية
+                                    if (extraPaid > activePendingLog!.remainingAmount) {
+                                      extraPaid = activePendingLog!.remainingAmount;
+                                      extraPaidController.text = extraPaid.toString();
+                                      extraPaidController.selection = TextSelection.fromPosition(TextPosition(offset: extraPaidController.text.length));
+                                    }
+
+                                    newPaidTotal = activePendingLog!.paidAmount + extraPaid;
+                                    newRemaining = activePendingLog!.remainingAmount - extraPaid;
+                                  });
+                                },
+                              ),
+                              const SizedBox(height: 15),
+                              Container(
+                                width: double.infinity,
+                                padding: const EdgeInsets.all(10),
+                                decoration: BoxDecoration(
+                                  color: newRemaining > 0 ? Colors.red.withOpacity(0.1) : Colors.green.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(8),
+                                  border: Border.all(color: newRemaining > 0 ? Colors.red : Colors.green, width: 0.5),
+                                ),
+                                child: Column(
+                                  children: [
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        const Text('المدفوع الإجمالي الجديد:', style: TextStyle(fontSize: 12, color: Colors.white60)),
+                                        Text(_formatMoney(newPaidTotal), style: const TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                      ],
+                                    ),
+                                    const SizedBox(height: 4),
+                                    Row(
+                                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        const Text('الذمة المتبقية الجديدة:', style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold)),
+                                        Text(
+                                          _formatMoney(newRemaining), 
+                                          style: TextStyle(
+                                            color: newRemaining > 0 ? Colors.redAccent : Colors.greenAccent, 
+                                            fontWeight: FontWeight.bold, 
+                                            fontSize: 13,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ],
+                                ),
+                              )
+                            ],
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(completionContext),
+                              child: const Text('إلغاء', style: TextStyle(color: Colors.white60)),
+                            ),
+                            ElevatedButton(
+                              style: ElevatedButton.styleFrom(backgroundColor: Colors.amber, foregroundColor: Colors.black),
+                              onPressed: () {
+                                setDialogState(() {
+                                  tempPaidVal = newPaidTotal;
+                                  tempRemainingVal = newRemaining;
+                                  isUpdateLogOperation = true;
+
+                                  if (newRemaining > 0) {
+                                    finalRecordedLogAmount = "المدفوع: ${_formatMoney(newPaidTotal)} (المتبقي: ${_formatMoney(newRemaining)})";
+                                  } else {
+                                    // ⚡️ تعديل السجل ليصبح مكتمل بالكامل ومتبقي 0
+                                    finalRecordedLogAmount = "${_formatMoney(newPaidTotal)} (تم استكمال الدفعة - متبقي 0)";
+                                  }
+                                });
+                                Navigator.pop(completionContext);
+                              },
+                              child: const Text('تأكيد التعديل وتحديث السجل', style: TextStyle(fontWeight: FontWeight.bold)),
+                            )
+                          ],
+                        ),
+                      );
+                    },
+                  );
+                },
+              );
+            }
+
             void handleAttemptToClose() {
-              if (checkHasChanges()) {
+              if (checkHasChanges() || isUpdateLogOperation) {
                 showDialog(
                   context: context,
                   builder: (subContext) => Directionality(
@@ -669,7 +978,7 @@ class _MainDashboardState extends State<MainDashboard> {
                     child: AlertDialog(
                       backgroundColor: const Color(0xFF1C1A1A),
                       title: const Text('⚠️ تعديلات غير محفوظة', style: TextStyle(color: Colors.amber, fontWeight: FontWeight.bold)),
-                      content: const Text('لقد قمت بتغيير بعض البيانات أو الجداول، هل تريد حفظ التعديلات قبل الخروج؟'),
+                      content: const Text('لقد قمت بتغيير بعض البيانات أو الجداول الماليّة، هل تريد حفظ التعديلات قبل الخروج؟'),
                       actions: [
                         TextButton(
                           onPressed: () {
@@ -741,15 +1050,71 @@ class _MainDashboardState extends State<MainDashboard> {
                               const SizedBox(width: 10),
                               Expanded(
                                 child: DropdownButtonFormField<String>(
-                                  initialValue: currentPayment,
+                                  value: currentPayment,
                                   decoration: const InputDecoration(labelText: 'حالة الاشتراك الدورية', border: OutlineInputBorder()),
                                   items: ['تم الدفع', 'لم يتم الدفع'].map((val) => DropdownMenuItem(value: val, child: Text(val))).toList(),
-                                  onChanged: (val) => setDialogState(() => currentPayment = val!),
+                                  onChanged: (val) {
+                                    setDialogState(() {
+                                      currentPayment = val!;
+                                      if (currentPayment == 'تم الدفع' && activePendingLog == null) {
+                                        _promptInitialPaymentDialog();
+                                      }
+                                    });
+                                  },
                                 ),
                               ),
                             ],
                           ),
-                          const SizedBox(height: 20),
+                          const SizedBox(height: 15),
+
+                          // 💡 زر تحديث واستكمال الدفعة المتبقية
+                          if (activePendingLog != null) ...[
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(12),
+                              decoration: BoxDecoration(
+                                color: Colors.red.withOpacity(0.08),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: Colors.red.withOpacity(0.5), width: 1),
+                              ),
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Row(
+                                    children: [
+                                      const Icon(Icons.warning_amber_rounded, color: Colors.redAccent, size: 20),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        'ذمة مالية متبقية: ${_formatMoney(activePendingLog.remainingAmount)}',
+                                        style: const TextStyle(fontSize: 12, color: Colors.redAccent, fontWeight: FontWeight.bold),
+                                      ),
+                                    ],
+                                  ),
+                                  const SizedBox(height: 4),
+                                  const Text(
+                                    'اضغط على الزر أدناه لتسجيل الدفع الجديد وتحديث السجل تلقائياً.',
+                                    style: TextStyle(fontSize: 11, color: Colors.white70),
+                                  ),
+                                  const SizedBox(height: 10),
+                                  SizedBox(
+                                    width: double.infinity,
+                                    height: 40,
+                                    child: ElevatedButton.icon(
+                                      style: ElevatedButton.styleFrom(
+                                        backgroundColor: Colors.amber, 
+                                        foregroundColor: Colors.black,
+                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                                      ),
+                                      icon: const Icon(Icons.monetization_on, size: 18),
+                                      label: const Text('إدخال المبلغ المتبقي وتعديل السجل', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                                      onPressed: _promptDebtCompletionDialog,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                            const SizedBox(height: 15),
+                          ],
                           
                           const Text('🏋️‍♂️ جدول التدريبات الأسبوعي للكابتن:', style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold, color: Colors.amber)),
                           const Divider(color: Colors.amber),
@@ -781,13 +1146,13 @@ class _MainDashboardState extends State<MainDashboard> {
                           SizedBox(
                             width: double.infinity,
                             child: ElevatedButton.icon(
-                              style: ElevatedButton.styleFrom(backgroundColor: Colors.red.withValues(alpha: 0.2), foregroundColor: Colors.red, side: const BorderSide(color: Colors.red)),
+                              style: ElevatedButton.styleFrom(backgroundColor: Colors.red.withOpacity(0.2), foregroundColor: Colors.red, side: const BorderSide(color: Colors.red)),
                               icon: const Icon(Icons.delete_forever),
                               label: const Text('🗑️ حذف هذا اللاعب نهائياً من النادي'),
                               onPressed: () {
                                 setState(() {
                                   _members.removeWhere((m) => m.id == player.id);
-                                  _saveDataToStorage(); // حفظ فوري بعد الحذف لتثبيت التعديل
+                                  _saveDataToStorage();
                                 });
                                 Navigator.pop(context);
                                 ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('تم حذف اللاعب وإلغاء قيوده تماماً')));
@@ -890,7 +1255,7 @@ class _MainDashboardState extends State<MainDashboard> {
             children: [
               Container(
                 padding: const EdgeInsets.all(15),
-                decoration: BoxDecoration(color: const Color(0xFF1A1A1A), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.amber.withValues(alpha: 0.3))),
+                decoration: BoxDecoration(color: const Color(0xFF1A1A1A), borderRadius: BorderRadius.circular(12), border: Border.all(color: Colors.amber.withOpacity(0.3))),
                 child: Row(
                   mainAxisAlignment: MainAxisAlignment.spaceAround,
                   children: [
@@ -954,7 +1319,7 @@ class _MainDashboardState extends State<MainDashboard> {
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
                                   decoration: BoxDecoration(
-                                    color: player.daysLeft <= 5 ? Colors.red.withValues(alpha: 0.2) : Colors.amber.withValues(alpha: 0.1),
+                                    color: player.daysLeft <= 5 ? Colors.red.withOpacity(0.2) : Colors.amber.withOpacity(0.1),
                                     borderRadius: BorderRadius.circular(6),
                                     border: Border.all(color: player.daysLeft <= 5 ? Colors.red : Colors.amber, width: 0.5)
                                   ),
@@ -969,7 +1334,7 @@ class _MainDashboardState extends State<MainDashboard> {
                             isThreeLine: true,
                             trailing: Container(
                               padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                              decoration: BoxDecoration(color: payColor.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(8), border: Border.all(color: payColor)),
+                              decoration: BoxDecoration(color: payColor.withOpacity(0.12), borderRadius: BorderRadius.circular(8), border: Border.all(color: payColor)),
                               child: Text(player.paymentStatus, style: TextStyle(color: payColor, fontWeight: FontWeight.bold, fontSize: 12)),
                             ),
                           ),
